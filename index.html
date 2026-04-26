@@ -3,32 +3,32 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>訂單明細與總量統計</title>
+    <title>訂單自動拆解統計 6.0</title>
     <style>
-        body { font-family: sans-serif; padding: 15px; background: #f4f4f4; color: #333; }
-        .card { background: white; padding: 20px; border-radius: 12px; border: 2px solid #000; max-width: 700px; margin: auto; box-shadow: 5px 5px 0px #000; }
-        textarea { width: 100%; height: 200px; font-size: 16px; padding: 12px; box-sizing: border-box; border: 2px solid #ccc; border-radius: 8px; }
-        button { width: 100%; padding: 20px; background: #007AFF; color: #fff; border: none; border-radius: 8px; font-size: 22px; font-weight: bold; margin-top: 10px; cursor: pointer; transition: 0.2s; }
-        button:active { background: #0056b3; transform: scale(0.98); }
-        .section-title { margin-top: 30px; font-size: 22px; font-weight: bold; background: #000; color: #fff; padding: 8px 15px; border-radius: 5px; }
-        .detail-box { margin-top: 10px; background: #fff; border: 1px solid #ddd; padding: 15px; border-radius: 8px; }
-        .order-block { margin-bottom: 20px; padding-bottom: 10px; border-bottom: 2px dashed #eee; }
-        .order-header { font-weight: bold; color: #007AFF; margin-bottom: 5px; font-size: 18px; }
-        .item-row { font-size: 24px; display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f0f0f0; }
-        .qty-total { color: #ff0000; font-weight: bold; }
+        body { font-family: sans-serif; padding: 15px; background: #fdfdfd; color: #333; }
+        .card { background: white; padding: 20px; border-radius: 12px; border: 3px solid #000; max-width: 700px; margin: auto; box-shadow: 8px 8px 0px #000; }
+        textarea { width: 100%; height: 200px; font-size: 16px; padding: 12px; box-sizing: border-box; border: 2px solid #ccc; border-radius: 8px; margin-bottom: 10px; }
+        button { width: 100%; padding: 20px; background: #FF3B30; color: #fff; border: none; border-radius: 8px; font-size: 22px; font-weight: bold; cursor: pointer; }
+        .section-title { margin-top: 30px; font-size: 22px; font-weight: bold; background: #000; color: #fff; padding: 10px 15px; border-radius: 5px; }
+        .detail-box { margin-top: 10px; background: #fff; border: 2px solid #ddd; padding: 15px; border-radius: 8px; }
+        .order-block { margin-bottom: 25px; padding: 15px; border: 1px solid #eee; border-left: 10px solid #007AFF; background: #f9f9f9; }
+        .order-header { font-weight: bold; color: #007AFF; margin-bottom: 8px; font-size: 20px; border-bottom: 1px solid #007AFF; }
+        .item-row { font-size: 26px; display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #eee; }
+        .qty-total { color: #FF3B30; font-weight: bold; }
+        ul { list-style: none; padding: 0; margin: 0; font-size: 20px; line-height: 1.8; }
     </style>
 </head>
 <body>
     <div class="card">
-        <h2>📑 多單批量拆解統計</h2>
-        <textarea id="orderInput" placeholder="在此連續貼上多張訂單內容..."></textarea>
-        <button onclick="processOrders()">✨ 一鍵生成明細與總量</button>
+        <h2>🍱 批量訂單自動加總</h2>
+        <textarea id="orderInput" placeholder="直接把所有 LINE 訂單全部貼進來..."></textarea>
+        <button onclick="process()">🚀 一鍵分析並加總</button>
         
         <div id="summaryArea" style="display:none;">
-            <div class="section-title">📦 今日備貨總數量</div>
+            <div class="section-title">📊 今日備貨大總計</div>
             <div id="totalResult" class="detail-box"></div>
 
-            <div class="section-title">🔍 各訂單拆解明細</div>
+            <div class="section-title">📃 每一張單的細項</div>
             <div id="detailResult" class="detail-box"></div>
         </div>
     </div>
@@ -43,63 +43,62 @@
             { name: '煙燻鴨', keys: ['鴨','805'] },
             { name: '鰻魚', keys: ['鰻','806'] }
         ];
-        const excludeList = ['801','802','803','804','805','806','601','602','603','604','605','606','607','608','301','302'];
+        const menuIDs = ['801','802','803','804','805','806','601','602','603','604','605','606','607','608','301','302'];
 
-        function processOrders() {
+        function process() {
             const rawText = document.getElementById('orderInput').value;
-            // 以「用餐日期」或「公司名稱」或是明顯的空行作為訂單分割點
-            const orders = rawText.split(/(?=用餐日期|公司名稱|◆|第\d+袋)/g).filter(t => t.trim().length > 5);
+            // 改進的切單邏輯：只要看到關鍵標頭就切開，適應各種訂單
+            const orderChunks = rawText.split(/(?=用餐日期|公司名稱|◆|第\d+袋|先生|小姐|送達時間)/g).filter(t => t.trim().length > 3);
             
-            let finalTotal = { '鮭魚': 0, '五花豚': 0, '唐揚雞': 0, '鯛魚': 0, '鱈魚': 0, '煙燻鴨': 0, '鰻魚': 0 };
+            let grandTotal = { '鮭魚': 0, '五花豚': 0, '唐揚雞': 0, '鯛魚': 0, '鱈魚': 0, '煙燻鴨': 0, '鰻魚': 0 };
             let detailHtml = '';
 
-            orders.forEach((orderText, index) => {
-                let currentOrderTotal = { '鮭魚': 0, '五花豚': 0, '唐揚雞': 0, '鯛魚': 0, '鱈魚': 0, '煙燻鴨': 0, '鰻魚': 0 };
-                const lines = orderText.split('\n');
-                
-                lines.forEach(line => {
-                    let matches = line.match(/\d+(\.\d+)?/g);
-                    if (!matches) return;
-                    
-                    let validNums = matches.filter(n => n.length < 7 && !excludeList.includes(n));
-                    let qty = validNums.length > 0 ? parseFloat(validNums[validNums.length - 1]) : 0;
-                    if (qty === 0) return;
+            orderChunks.forEach((chunk, i) => {
+                let chunkTotal = { '鮭魚': 0, '五花豚': 0, '唐揚雞': 0, '鯛魚': 0, '鱈魚': 0, '煙燻鴨': 0, '鰻魚': 0 };
+                const lines = chunk.split('\n');
+                let orderTitle = chunk.split('\n')[0].substring(0, 20); // 抓第一行當標題
 
+                lines.forEach(line => {
+                    let nums = line.match(/\d+(\.\d+)?/g);
+                    if (!nums) return;
+
+                    // 過濾掉電話、統編與編號，抓出真正的數量
+                    let valid = nums.filter(n => n.length < 7 && !menuIDs.includes(n));
+                    if (valid.length === 0) return;
+                    let qty = parseFloat(valid[valid.length - 1]);
+
+                    // 判斷是否為雙拼
                     let isDouble = line.includes('拼') || (line.includes('60') && !line.includes('80') && !line.includes('30'));
 
                     config.forEach(item => {
                         if (item.keys.some(k => line.includes(k))) {
                             let rate = (isDouble && !(line.includes('80') || line.includes('30'))) ? 0.5 : 1;
-                            currentOrderTotal[item.name] += (qty * rate);
-                            finalTotal[item.name] += (qty * rate);
+                            chunkTotal[item.name] += (qty * rate);
+                            grandTotal[item.name] += (qty * rate);
                         }
                     });
                 });
 
-                // 生成單張明細 HTML
-                let orderItemsHtml = '';
-                for (let name in currentOrderTotal) {
-                    if (currentOrderTotal[name] > 0) orderItemsHtml += `<li>${name}: ${currentOrderTotal[name]} 份</li>`;
+                let itemsHtml = '';
+                for (let n in chunkTotal) {
+                    if (chunkTotal[n] > 0) itemsHtml += `<li>📍 ${n}: ${chunkTotal[n]} 份</li>`;
                 }
-                
-                if (orderItemsHtml) {
+
+                if (itemsHtml) {
                     detailHtml += `<div class="order-block">
-                        <div class="order-header">📄 訂單 #${index + 1}</div>
-                        <ul style="font-size:18px; line-height:1.6;">${orderItemsHtml}</ul>
+                        <div class="order-header">單據 #${i+1}: ${orderTitle}...</div>
+                        <ul>${itemsHtml}</ul>
                     </div>`;
                 }
             });
 
-            // 生成總量 HTML
             let totalHtml = '';
-            for (let name in finalTotal) {
-                if (finalTotal[name] > 0) {
-                    totalHtml += `<div class="item-row"><span>📍 ${name}</span><span class="qty-total">${finalTotal[name]} 份</span></div>`;
-                }
+            for (let n in grandTotal) {
+                if (grandTotal[n] > 0) totalHtml += `<div class="item-row"><span>${n}</span><span class="qty-total">${grandTotal[n]} 份</span></div>`;
             }
 
-            document.getElementById('totalResult').innerHTML = totalHtml || '無數據';
-            document.getElementById('detailResult').innerHTML = detailHtml || '無數據';
+            document.getElementById('totalResult').innerHTML = totalHtml || '查無數據';
+            document.getElementById('detailResult').innerHTML = detailHtml || '查無數據';
             document.getElementById('summaryArea').style.display = 'block';
         }
     </script>
