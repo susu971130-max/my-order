@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>最強懶人備貨計算器</title>
+    <style>
+        body { font-family: -apple-system, sans-serif; padding: 20px; background: #f0f2f5; }
+        .card { background: white; padding: 20px; border-radius: 15px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        textarea { width: 100%; height: 180px; border: 1px solid #ddd; border-radius: 8px; padding: 10px; font-size: 16px; box-sizing: border-box; }
+        button { width: 100%; padding: 15px; background: #007AFF; color: white; border: none; border-radius: 8px; font-size: 18px; margin-top: 10px; font-weight: bold; }
+        .res-box { margin-top: 20px; display: none; }
+        .item-row { display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid #eee; font-size: 20px; }
+        .name { font-weight: 500; }
+        .val { color: #ff3b30; font-weight: bold; }
+        h2 { text-align: center; color: #1c1c1e; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h2>🍱 訂單一鍵拆解</h2>
+        <textarea id="inp" placeholder="直接把 LINE 訂單整段貼進來..."></textarea>
+        <button onclick="cal()">立刻計算備貨量</button>
+        
+        <div id="res" class="res-box">
+            <div id="out"></div>
+        </div>
+    </div>
+
+    <script>
+        function cal() {
+            const txt = document.getElementById('inp').value;
+            const menu = [
+                { id: '鮭魚', kws: ['鮭魚','601','602','603','801','802'] },
+                { id: '五花豚', kws: ['五花豚','五花肉','602','604','605','608','803'] },
+                { id: '唐揚雞', kws: ['唐揚','堂揚','603','606','607','608','301'] },
+                { id: '鯛魚', kws: ['鯛魚','601','604','606','804'] },
+                { id: '鱈魚', kws: ['鱈魚','605','607','302'] },
+                { id: '煙燻鴨', kws: ['煙燻鴨','鴨','805'] },
+                { id: '鰻魚', kws: ['鰻魚','806'] }
+            ];
+
+            let counts = {};
+            const lines = txt.split('\n');
+
+            lines.forEach(l => {
+                // 抓取每一行最後出現的數字（通常是數量）
+                let numMatch = l.match(/(\d+)\s*[個份塊次]/);
+                if (!numMatch) numMatch = l.match(/(\d+)$/); // 沒單位就抓最後數字
+                
+                if (numMatch) {
+                    let n = parseFloat(numMatch[1]);
+                    menu.forEach(m => {
+                        m.kws.forEach(kw => {
+                            if (l.includes(kw)) {
+                                // 判斷倍率：6 開頭雙拼算 0.5，其餘算 1
+                                let rate = (l.includes('60') || (l.includes('拼') && !l.includes('80'))) ? 0.5 : 1;
+                                counts[m.id] = (counts[m.id] || 0) + (n * rate);
+                            }
+                        });
+                    });
+                }
+            });
+
+            let h = '';
+            for (let k in counts) {
+                if (counts[k] > 0) h += `<div class="item-row"><span class="name">${k}</span><span class="val">${counts[k]} 份</span></div>`;
+            }
+            document.getElementById('out').innerHTML = h || '⚠️ 找不到數量，請確認格式（例如：鮭魚 5個）';
+            document.getElementById('res').style.display = 'block';
+        }
+    </script>
+</body>
+</html>
