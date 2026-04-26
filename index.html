@@ -3,71 +3,86 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>最強懶人備貨計算器</title>
+    <title>智慧訂單監測器</title>
     <style>
-        body { font-family: -apple-system, sans-serif; padding: 20px; background: #f0f2f5; }
-        .card { background: white; padding: 20px; border-radius: 15px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
-        textarea { width: 100%; height: 180px; border: 1px solid #ddd; border-radius: 8px; padding: 10px; font-size: 16px; box-sizing: border-box; }
-        button { width: 100%; padding: 15px; background: #007AFF; color: white; border: none; border-radius: 8px; font-size: 18px; margin-top: 10px; font-weight: bold; }
-        .res-box { margin-top: 20px; display: none; }
-        .item-row { display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid #eee; font-size: 20px; }
-        .name { font-weight: 500; }
-        .val { color: #ff3b30; font-weight: bold; }
-        h2 { text-align: center; color: #1c1c1e; }
+        body { font-family: sans-serif; padding: 15px; background: #fdfdfd; }
+        .box { background: #fff; padding: 20px; border-radius: 12px; border: 2px solid #000; }
+        textarea { width: 100%; height: 200px; font-size: 16px; padding: 10px; box-sizing: border-box; border: 1px solid #ccc; }
+        button { width: 100%; padding: 20px; background: #ffcc00; color: #000; border: none; border-radius: 8px; font-size: 20px; font-weight: bold; cursor: pointer; margin-top: 10px; }
+        .result-title { margin-top: 25px; font-size: 22px; border-left: 5px solid #ffcc00; padding-left: 10px; }
+        .item-list { font-size: 24px; margin-top: 10px; line-height: 1.8; }
+        .num { color: red; font-weight: bold; margin: 0 5px; }
     </style>
 </head>
 <body>
-    <div class="card">
-        <h2>🍱 訂單一鍵拆解</h2>
-        <textarea id="inp" placeholder="直接把 LINE 訂單整段貼進來..."></textarea>
-        <button onclick="cal()">立刻計算備貨量</button>
-        
-        <div id="res" class="res-box">
-            <div id="out"></div>
-        </div>
+    <div class="box">
+        <h2>📋 貼上任何亂七八糟的訂單</h2>
+        <textarea id="rawInput" placeholder="直接複製貼上 LINE 的文字內容..."></textarea>
+        <button onclick="smartMonitor()">🚀 自動監測並計算</button>
+
+        <div class="result-title">備貨總量統計：</div>
+        <div id="output" class="item-list"></div>
     </div>
 
     <script>
-        function cal() {
-            const txt = document.getElementById('inp').value;
-            const menu = [
-                { id: '鮭魚', kws: ['鮭魚','601','602','603','801','802'] },
-                { id: '五花豚', kws: ['五花豚','五花肉','602','604','605','608','803'] },
-                { id: '唐揚雞', kws: ['唐揚','堂揚','603','606','607','608','301'] },
-                { id: '鯛魚', kws: ['鯛魚','601','604','606','804'] },
-                { id: '鱈魚', kws: ['鱈魚','605','607','302'] },
-                { id: '煙燻鴨', kws: ['煙燻鴨','鴨','805'] },
-                { id: '鰻魚', kws: ['鰻魚','806'] }
-            ];
+        function smartMonitor() {
+            const input = document.getElementById('rawInput').value;
+            const lines = input.split('\n');
+            const data = { '鮭魚': 0, '五花豚': 0, '唐揚雞': 0, '鯛魚': 0, '鱈魚': 0, '煙燻鴨': 0, '鰻魚': 0 };
+            
+            // 關鍵字對照表
+            const keywords = {
+                '鮭魚': ['鮭魚', '601', '602', '603', '801', '802'],
+                '五花豚': ['五花豚', '五花肉', '豚', '602', '604', '605', '608', '803'],
+                '唐揚雞': ['唐揚', '堂揚', '雞', '301', '603', '606', '607', '608'],
+                '鯛魚': ['鯛魚', '601', '604', '606', '804'],
+                '鱈魚': ['鱈魚', '605', '607', '302'],
+                '煙燻鴨': ['鴨', '805'],
+                '鰻魚': ['鰻', '806']
+            };
 
-            let counts = {};
-            const lines = txt.split('\n');
+            lines.forEach(line => {
+                if (!line.trim()) return;
 
-            lines.forEach(l => {
-                // 抓取每一行最後出現的數字（通常是數量）
-                let numMatch = l.match(/(\d+)\s*[個份塊次]/);
-                if (!numMatch) numMatch = l.match(/(\d+)$/); // 沒單位就抓最後數字
+                // 1. 抓出這一行所有的數字
+                let numbers = line.match(/\d+(\.\d+)?/g);
+                if (!numbers) return;
+
+                // 2. 判斷這一行最後一個數字通常是數量（過濾掉編號如 602）
+                let quantity = 0;
+                if (numbers.length > 1) {
+                    // 如果有多個數字，找不是 3, 6, 8 開頭的三位數編號以外的數字
+                    let possibleQty = numbers.filter(n => !(n.length === 3 && (n[0] === '6' || n[0] === '8' || n[0] === '3')));
+                    quantity = possibleQty.length > 0 ? parseFloat(possibleQty[possibleQty.length - 1]) : parseFloat(numbers[numbers.length - 1]);
+                } else {
+                    quantity = parseFloat(numbers[0]);
+                }
+
+                // 3. 檢查關鍵字並分配份數
+                let isDouble = line.includes('拼') || line.includes('雙');
                 
-                if (numMatch) {
-                    let n = parseFloat(numMatch[1]);
-                    menu.forEach(m => {
-                        m.kws.forEach(kw => {
-                            if (l.includes(kw)) {
-                                // 判斷倍率：6 開頭雙拼算 0.5，其餘算 1
-                                let rate = (l.includes('60') || (l.includes('拼') && !l.includes('80'))) ? 0.5 : 1;
-                                counts[m.id] = (counts[m.id] || 0) + (n * rate);
-                            }
-                        });
-                    });
+                for (let category in keywords) {
+                    let match = keywords[category].some(k => line.includes(k));
+                    if (match) {
+                        // 如果是雙拼，該食材只算 0.5 份；單拼則算 1 份
+                        // 特別例外：8 系列雖然包含關鍵字，但它是單拼
+                        let multiplier = 1;
+                        if (isDouble && !(line.includes('80') || line.includes('30'))) {
+                            multiplier = 0.5;
+                        }
+                        data[category] += (quantity * multiplier);
+                    }
                 }
             });
 
-            let h = '';
-            for (let k in counts) {
-                if (counts[k] > 0) h += `<div class="item-row"><span class="name">${k}</span><span class="val">${counts[k]} 份</span></div>`;
+            // 4. 顯示結果
+            let resHtml = '';
+            for (let key in data) {
+                if (data[key] > 0) {
+                    resHtml += `<div>📍 ${key}: <span class="num">${data[key]}</span> 份</div>`;
+                }
             }
-            document.getElementById('out').innerHTML = h || '⚠️ 找不到數量，請確認格式（例如：鮭魚 5個）';
-            document.getElementById('res').style.display = 'block';
+            document.getElementById('output').innerHTML = resHtml || '偵測不到數據，請確保內容包含「品項」與「數字」';
         }
     </script>
 </body>
