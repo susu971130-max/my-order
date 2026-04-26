@@ -3,82 +3,104 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>精準訂單拆解器 3.0</title>
+    <title>訂單明細與總量統計</title>
     <style>
-        body { font-family: sans-serif; padding: 15px; background: #f0f2f5; }
-        .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+        body { font-family: sans-serif; padding: 15px; background: #f4f4f4; color: #333; }
+        .card { background: white; padding: 20px; border-radius: 12px; border: 2px solid #000; max-width: 700px; margin: auto; box-shadow: 5px 5px 0px #000; }
         textarea { width: 100%; height: 200px; font-size: 16px; padding: 12px; box-sizing: border-box; border: 2px solid #ccc; border-radius: 8px; }
-        button { width: 100%; padding: 18px; background: #007AFF; color: white; border: none; border-radius: 8px; font-size: 20px; font-weight: bold; margin-top: 10px; cursor: pointer; }
-        .res-title { margin-top: 25px; font-size: 18px; font-weight: bold; border-left: 5px solid #007AFF; padding-left: 10px; }
-        .item { font-size: 26px; margin-top: 15px; display: flex; justify-content: space-between; background: #fffbe6; padding: 10px; border-radius: 5px; }
-        .qty { color: #d93025; font-weight: bold; }
+        button { width: 100%; padding: 20px; background: #007AFF; color: #fff; border: none; border-radius: 8px; font-size: 22px; font-weight: bold; margin-top: 10px; cursor: pointer; transition: 0.2s; }
+        button:active { background: #0056b3; transform: scale(0.98); }
+        .section-title { margin-top: 30px; font-size: 22px; font-weight: bold; background: #000; color: #fff; padding: 8px 15px; border-radius: 5px; }
+        .detail-box { margin-top: 10px; background: #fff; border: 1px solid #ddd; padding: 15px; border-radius: 8px; }
+        .order-block { margin-bottom: 20px; padding-bottom: 10px; border-bottom: 2px dashed #eee; }
+        .order-header { font-weight: bold; color: #007AFF; margin-bottom: 5px; font-size: 18px; }
+        .item-row { font-size: 24px; display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f0f0f0; }
+        .qty-total { color: #ff0000; font-weight: bold; }
     </style>
 </head>
 <body>
     <div class="card">
-        <h2>🚀 訂單精準偵測 (不抓電話統編)</h2>
-        <textarea id="orderInput" placeholder="直接貼上 LINE 訂單..."></textarea>
-        <button onclick="parseOrder()">一鍵精準計算</button>
-        <div class="res-title">員工備貨總量：</div>
-        <div id="result"></div>
+        <h2>📑 多單批量拆解統計</h2>
+        <textarea id="orderInput" placeholder="在此連續貼上多張訂單內容..."></textarea>
+        <button onclick="processOrders()">✨ 一鍵生成明細與總量</button>
+        
+        <div id="summaryArea" style="display:none;">
+            <div class="section-title">📦 今日備貨總數量</div>
+            <div id="totalResult" class="detail-box"></div>
+
+            <div class="section-title">🔍 各訂單拆解明細</div>
+            <div id="detailResult" class="detail-box"></div>
+        </div>
     </div>
 
     <script>
-        function parseOrder() {
-            const text = document.getElementById('orderInput').value;
-            const lines = text.split('\n');
-            const total = { '鮭魚': 0, '五花豚': 0, '唐揚雞': 0, '鯛魚': 0, '鱈魚': 0, '煙燻鴨': 0, '鰻魚': 0 };
+        const config = [
+            { name: '鮭魚', keys: ['鮭魚','601','602','603','801','802'] },
+            { name: '五花豚', keys: ['五花豚','豚','肉','602','604','605','608','803'] },
+            { name: '唐揚雞', keys: ['唐揚','堂揚','雞','603','606','607','608','301'] },
+            { name: '鯛魚', keys: ['鯛魚','601','604','606','804'] },
+            { name: '鱈魚', keys: ['鱈魚','605','607','302'] },
+            { name: '煙燻鴨', keys: ['鴨','805'] },
+            { name: '鰻魚', keys: ['鰻','806'] }
+        ];
+        const excludeList = ['801','802','803','804','805','806','601','602','603','604','605','606','607','608','301','302'];
 
-            const config = [
-                { name: '鮭魚', keys: ['鮭魚','601','602','603','801','802'] },
-                { name: '五花豚', keys: ['五花豚','豚','肉','602','604','605','608','803'] },
-                { name: '唐揚雞', keys: ['唐揚','堂揚','雞','603','606','607','608','301'] },
-                { name: '鯛魚', keys: ['鯛魚','601','604','606','804'] },
-                { name: '鱈魚', keys: ['鱈魚','605','607','302'] },
-                { name: '煙燻鴨', keys: ['鴨','805'] },
-                { name: '鰻魚', keys: ['鰻','806'] }
-            ];
+        function processOrders() {
+            const rawText = document.getElementById('orderInput').value;
+            // 以「用餐日期」或「公司名稱」或是明顯的空行作為訂單分割點
+            const orders = rawText.split(/(?=用餐日期|公司名稱|◆|第\d+袋)/g).filter(t => t.trim().length > 5);
+            
+            let finalTotal = { '鮭魚': 0, '五花豚': 0, '唐揚雞': 0, '鯛魚': 0, '鱈魚': 0, '煙燻鴨': 0, '鰻魚': 0 };
+            let detailHtml = '';
 
-            lines.forEach(line => {
-                if (!line.trim()) return;
+            orders.forEach((orderText, index) => {
+                let currentOrderTotal = { '鮭魚': 0, '五花豚': 0, '唐揚雞': 0, '鯛魚': 0, '鱈魚': 0, '煙燻鴨': 0, '鰻魚': 0 };
+                const lines = orderText.split('\n');
+                
+                lines.forEach(line => {
+                    let matches = line.match(/\d+(\.\d+)?/g);
+                    if (!matches) return;
+                    
+                    let validNums = matches.filter(n => n.length < 7 && !excludeList.includes(n));
+                    let qty = validNums.length > 0 ? parseFloat(validNums[validNums.length - 1]) : 0;
+                    if (qty === 0) return;
 
-                // 1. 抓出所有數字
-                let allNums = line.match(/\d+/g);
-                if (!allNums) return;
+                    let isDouble = line.includes('拼') || (line.includes('60') && !line.includes('80') && !line.includes('30'));
 
-                // 2. 過濾掉明顯不是數量的數字
-                // 排除：長度 >= 7 (電話)、長度 == 8 (統編)、特定的菜單編號 (6xx, 8xx, 3xx)
-                let realQty = 0;
-                let possibleQtys = allNums.filter(n => {
-                    if (n.length >= 7) return false; // 排除電話/統編
-                    if (['601','602','603','604','605','606','607','608','801','802','803','804','805','806','301','302'].includes(n)) return false; // 排除編號
-                    return true;
+                    config.forEach(item => {
+                        if (item.keys.some(k => line.includes(k))) {
+                            let rate = (isDouble && !(line.includes('80') || line.includes('30'))) ? 0.5 : 1;
+                            currentOrderTotal[item.name] += (qty * rate);
+                            finalTotal[item.name] += (qty * rate);
+                        }
+                    });
                 });
 
-                if (possibleQtys.length > 0) {
-                    // 優先取最後一個符合條件的數字
-                    realQty = parseFloat(possibleQtys[possibleQtys.length - 1]);
+                // 生成單張明細 HTML
+                let orderItemsHtml = '';
+                for (let name in currentOrderTotal) {
+                    if (currentOrderTotal[name] > 0) orderItemsHtml += `<li>${name}: ${currentOrderTotal[name]} 份</li>`;
                 }
-
-                // 3. 判斷倍率
-                let isDouble = line.includes('拼') || (line.includes('60') && !line.includes('80') && !line.includes('30'));
-
-                config.forEach(item => {
-                    if (item.keys.some(k => line.includes(k))) {
-                        let rate = isDouble ? 0.5 : 1;
-                        if (line.includes('80') || line.includes('30')) rate = 1;
-                        total[item.name] += (realQty * rate);
-                    }
-                });
+                
+                if (orderItemsHtml) {
+                    detailHtml += `<div class="order-block">
+                        <div class="order-header">📄 訂單 #${index + 1}</div>
+                        <ul style="font-size:18px; line-height:1.6;">${orderItemsHtml}</ul>
+                    </div>`;
+                }
             });
 
-            let outputHtml = '';
-            for (let name in total) {
-                if (total[name] > 0) {
-                    outputHtml += `<div class="item"><span>📍 ${name}</span><span class="qty">${total[name]} 份</span></div>`;
+            // 生成總量 HTML
+            let totalHtml = '';
+            for (let name in finalTotal) {
+                if (finalTotal[name] > 0) {
+                    totalHtml += `<div class="item-row"><span>📍 ${name}</span><span class="qty-total">${finalTotal[name]} 份</span></div>`;
                 }
             }
-            document.getElementById('result').innerHTML = outputHtml || '尚未偵測到有效數量，請檢查訂單內容。';
+
+            document.getElementById('totalResult').innerHTML = totalHtml || '無數據';
+            document.getElementById('detailResult').innerHTML = detailHtml || '無數據';
+            document.getElementById('summaryArea').style.display = 'block';
         }
     </script>
 </body>
