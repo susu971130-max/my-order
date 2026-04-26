@@ -3,23 +3,23 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>訂單自動拆解 2.0</title>
+    <title>精準訂單拆解器 3.0</title>
     <style>
-        body { font-family: sans-serif; padding: 15px; background: #f4f7f6; }
-        .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); border: 1px solid #ddd; }
-        textarea { width: 100%; height: 200px; font-size: 16px; padding: 12px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 8px; }
-        button { width: 100%; padding: 18px; background: #28a745; color: white; border: none; border-radius: 8px; font-size: 20px; font-weight: bold; margin-top: 10px; cursor: pointer; }
-        .res-title { margin-top: 25px; font-size: 20px; font-weight: bold; color: #333; padding-bottom: 5px; border-bottom: 2px solid #28a745; }
-        .item { font-size: 24px; margin-top: 12px; display: flex; justify-content: space-between; }
-        .qty { color: #d9534f; font-weight: bold; }
+        body { font-family: sans-serif; padding: 15px; background: #f0f2f5; }
+        .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+        textarea { width: 100%; height: 200px; font-size: 16px; padding: 12px; box-sizing: border-box; border: 2px solid #ccc; border-radius: 8px; }
+        button { width: 100%; padding: 18px; background: #007AFF; color: white; border: none; border-radius: 8px; font-size: 20px; font-weight: bold; margin-top: 10px; cursor: pointer; }
+        .res-title { margin-top: 25px; font-size: 18px; font-weight: bold; border-left: 5px solid #007AFF; padding-left: 10px; }
+        .item { font-size: 26px; margin-top: 15px; display: flex; justify-content: space-between; background: #fffbe6; padding: 10px; border-radius: 5px; }
+        .qty { color: #d93025; font-weight: bold; }
     </style>
 </head>
 <body>
     <div class="card">
-        <h2>📋 貼上 LINE 訂單內容</h2>
-        <textarea id="orderInput" placeholder="直接複製貼上訂單..."></textarea>
-        <button onclick="parseOrder()">一鍵自動拆解</button>
-        <div class="res-title">今日備貨統計：</div>
+        <h2>🚀 訂單精準偵測 (不抓電話統編)</h2>
+        <textarea id="orderInput" placeholder="直接貼上 LINE 訂單..."></textarea>
+        <button onclick="parseOrder()">一鍵精準計算</button>
+        <div class="res-title">員工備貨總量：</div>
         <div id="result"></div>
     </div>
 
@@ -29,14 +29,10 @@
             const lines = text.split('\n');
             const total = { '鮭魚': 0, '五花豚': 0, '唐揚雞': 0, '鯛魚': 0, '鱈魚': 0, '煙燻鴨': 0, '鰻魚': 0 };
 
-            // 1. 定義菜單編號清單 (用來排除)
-            const menuIDs = ['801','802','803','804','805','806','601','602','603','604','605','606','607','608','301','302'];
-            
-            // 2. 定義食材對應關鍵字
             const config = [
                 { name: '鮭魚', keys: ['鮭魚','601','602','603','801','802'] },
                 { name: '五花豚', keys: ['五花豚','豚','肉','602','604','605','608','803'] },
-                { name: '唐揚雞', keys: ['唐揚','雞','603','606','607','608','301'] },
+                { name: '唐揚雞', keys: ['唐揚','堂揚','雞','603','606','607','608','301'] },
                 { name: '鯛魚', keys: ['鯛魚','601','604','606','804'] },
                 { name: '鱈魚', keys: ['鱈魚','605','607','302'] },
                 { name: '煙燻鴨', keys: ['鴨','805'] },
@@ -46,31 +42,32 @@
             lines.forEach(line => {
                 if (!line.trim()) return;
 
-                // 找出行內所有數字
-                let matches = line.match(/\d+/g);
-                if (!matches) return;
+                // 1. 抓出所有數字
+                let allNums = line.match(/\d+/g);
+                if (!allNums) return;
 
-                // 核心邏輯：過濾掉在 menuIDs 裡的編號，剩下的才是數量
-                let quantity = 0;
-                let filteredNums = matches.filter(n => !menuIDs.includes(n));
-                
-                if (filteredNums.length > 0) {
-                    // 如果有剩下的數字，取最後一個當作數量
-                    quantity = parseFloat(filteredNums[filteredNums.length - 1]);
-                } else {
-                    // 如果這行只有編號(例如「602 10個」變成只有 602)，那就抓最後一個數字
-                    quantity = parseFloat(matches[matches.length - 1]);
+                // 2. 過濾掉明顯不是數量的數字
+                // 排除：長度 >= 7 (電話)、長度 == 8 (統編)、特定的菜單編號 (6xx, 8xx, 3xx)
+                let realQty = 0;
+                let possibleQtys = allNums.filter(n => {
+                    if (n.length >= 7) return false; // 排除電話/統編
+                    if (['601','602','603','604','605','606','607','608','801','802','803','804','805','806','301','302'].includes(n)) return false; // 排除編號
+                    return true;
+                });
+
+                if (possibleQtys.length > 0) {
+                    // 優先取最後一個符合條件的數字
+                    realQty = parseFloat(possibleQtys[possibleQtys.length - 1]);
                 }
 
-                // 判斷倍率 (雙拼 0.5, 單拼 1)
+                // 3. 判斷倍率
                 let isDouble = line.includes('拼') || (line.includes('60') && !line.includes('80') && !line.includes('30'));
 
                 config.forEach(item => {
                     if (item.keys.some(k => line.includes(k))) {
                         let rate = isDouble ? 0.5 : 1;
-                        // 特殊處理：如果行內同時有 80 或 30 開頭，強制算 1 (因為那是單拼)
                         if (line.includes('80') || line.includes('30')) rate = 1;
-                        total[item.name] += (quantity * rate);
+                        total[item.name] += (realQty * rate);
                     }
                 });
             });
@@ -81,7 +78,7 @@
                     outputHtml += `<div class="item"><span>📍 ${name}</span><span class="qty">${total[name]} 份</span></div>`;
                 }
             }
-            document.getElementById('result').innerHTML = outputHtml || '讀取不到有效訂單，請確認有輸入數量。';
+            document.getElementById('result').innerHTML = outputHtml || '尚未偵測到有效數量，請檢查訂單內容。';
         }
     </script>
 </body>
